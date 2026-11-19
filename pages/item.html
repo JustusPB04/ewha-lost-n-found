@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lost n Found - Item Details</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        header {
+            padding: 12px 16px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        header h1 {
+            margin: 10px 0 20px;
+        }
+
+        nav {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        nav a {
+            margin-right: 14px;
+            color: #333;
+            text-decoration: none;
+        }
+
+        main {
+            max-width: 600px;
+            margin: 30px auto;
+            padding: 16px;
+        }
+
+        .item-image {
+            width: 100%;
+            max-height: 350px;
+            object-fit: contain;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            background: #f5f5f5;
+        }
+
+        .item-info {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .info-row {
+            margin: 16px 0;
+            line-height: 1.5;
+        }
+
+        .info-label {
+            display: block;
+            color: #777;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        #foundButton {
+            width: 100%;
+            padding: 14px;
+            margin-top: 20px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #foundButton:hover {
+            background: #555;
+        }
+
+        #foundButton:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+
+        #message {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .error {
+            color: red;
+        }
+
+        footer {
+            text-align: center;
+            padding: 16px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>lostnfound</h1>
+
+        <nav>
+            <div>
+                <a href="add.html">add</a>
+                <a href="search.html">search</a>
+            </div>
+
+            <div>
+                <a href="logout.html">logout</a>
+                <a href="mypage.html">mypage</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <h2>Item Details</h2>
+
+        <p id="message">Loading item details...</p>
+
+        <div id="itemContainer" style="display: none;">
+
+            <div id="imageContainer"></div>
+
+            <section class="item-info">
+
+                <h2 id="itemName"></h2>
+
+                <div class="info-row">
+                    <span class="info-label">Category</span>
+                    <span id="itemCategory"></span>
+                </div>
+
+                <div class="info-row">
+                    <span class="info-label">Description</span>
+                    <span id="itemDescription"></span>
+                </div>
+
+                <div class="info-row">
+                    <span class="info-label">Date Found</span>
+                    <span id="foundDate"></span>
+                </div>
+
+                <div class="info-row">
+                    <span class="info-label">Location Found</span>
+                    <span id="foundLocation"></span>
+                </div>
+
+                <div class="info-row">
+                    <span class="info-label">Storage Location</span>
+                    <span id="pickupMethod"></span>
+                </div>
+
+                <button id="foundButton">
+                    Mark as Returned
+                </button>
+
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Gitastic5. All rights reserved.</p>
+    </footer>
+
+    <!-- Supabase library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Team Supabase connection -->
+    <script src="supabase.js"></script>
+
+    <script>
+        const itemId = new URLSearchParams(
+            window.location.search
+        ).get("id");
+
+        const message = document.getElementById("message");
+        const itemContainer = document.getElementById("itemContainer");
+        const foundButton = document.getElementById("foundButton");
+
+        // Display messages
+        function showMessage(text, isError = false) {
+            message.textContent = text;
+            message.className = isError ? "error" : "";
+        }
+
+        // Load item details from Supabase
+        async function loadItem() {
+
+            if (!itemId) {
+                showMessage("No item was selected.", true);
+                return;
+            }
+
+            // Check login status
+            const { data: sessionData, error: sessionError } =
+                await supabaseClient.auth.getSession();
+
+            if (sessionError || !sessionData.session) {
+                window.location.href = "login.html";
+                return;
+            }
+
+            // Get item information
+            const { data: item, error } = await supabaseClient
+                .from("items")
+                .select(`
+                    id,
+                    name,
+                    description,
+                    found_date,
+                    found_location,
+                    pickup_method,
+                    categories(name),
+                    item_images(storage_path)
+                `)
+                .eq("id", itemId)
+                .single();
+
+            if (error || !item) {
+                console.error(error);
+                showMessage("Could not load item details.", true);
+                return;
+            }
+
+            // Display basic information
+            document.getElementById("itemName").textContent =
+                item.name || "No name";
+
+            const category = Array.isArray(item.categories)
+                ? item.categories[0]
+                : item.categories;
+
+            document.getElementById("itemCategory").textContent =
+                category?.name || "Not specified";
+
+            document.getElementById("itemDescription").textContent =
+                item.description || "No description";
+
+            document.getElementById("foundDate").textContent =
+                item.found_date || "Not specified";
+
+            document.getElementById("foundLocation").textContent =
+                item.found_location || "Not specified";
+
+            document.getElementById("pickupMethod").textContent =
+                item.pickup_method || "Not specified";
+
+            // Display item images
+            const imageContainer =
+                document.getElementById("imageContainer");
+
+            imageContainer.innerHTML = "";
+
+            for (const image of (item.item_images || [])) {
+
+                const { data: imageData, error: imageError } =
+                    await supabaseClient.storage
+                        .from("item-images")
+                        .createSignedUrl(image.storage_path, 3600);
+
+                if (imageError || !imageData) {
+                    console.error(imageError);
+                    continue;
+                }
+
+                const img = document.createElement("img");
+
+                img.src = imageData.signedUrl;
+                img.alt = item.name;
+                img.className = "item-image";
+
+                imageContainer.appendChild(img);
+            }
+
+            message.style.display = "none";
+            itemContainer.style.display = "block";
+        }
+
+        // Mark item as returned
+        foundButton.addEventListener("click", async () => {
+
+            const confirmed = confirm(
+                "Has this item been returned? It will be deleted."
+            );
+
+            if (!confirmed) return;
+
+            foundButton.disabled = true;
+            foundButton.textContent = "Processing...";
+
+            // Get image paths
+            const { data: images, error: imageError } =
+                await supabaseClient
+                    .from("item_images")
+                    .select("storage_path")
+                    .eq("item_id", itemId);
+
+            if (imageError) {
+                alert("Could not retrieve item images.");
+                console.error(imageError);
+                foundButton.disabled = false;
+                foundButton.textContent = "Mark as Returned";
+                return;
+            }
+
+            // Delete images from Storage
+            const paths = (images || []).map(
+                image => image.storage_path
+            );
+
+            if (paths.length > 0) {
+
+                const { error: storageError } =
+                    await supabaseClient.storage
+                        .from("item-images")
+                        .remove(paths);
+
+                if (storageError) {
+                    alert("Could not delete item images.");
+                    console.error(storageError);
+                    foundButton.disabled = false;
+                    foundButton.textContent = "Mark as Returned";
+                    return;
+                }
+            }
+
+            // Delete item from database
+            const { error: deleteError } =
+                await supabaseClient
+                    .from("items")
+                    .delete()
+                    .eq("id", itemId);
+
+            if (deleteError) {
+                alert("Could not delete the item.");
+                console.error(deleteError);
+                foundButton.disabled = false;
+                foundButton.textContent = "Mark as Returned";
+                return;
+            }
+
+            alert("The item has been marked as returned!");
+
+            window.location.href = "search.html";
+        });
+
+        // Start loading
+        loadItem();
+
+    </script>
+
+</body>
+</html>
