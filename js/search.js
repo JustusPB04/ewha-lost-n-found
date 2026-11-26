@@ -1,6 +1,6 @@
 const searchInput = document.getElementById("searchInput");
-const locationFilter = document.getElementById("locationFilter"); // found_location 값과 맞춤
-const categoryFilter = document.getElementById("categoryFilter"); // option value에 category.id 사용
+const locationFilter = document.getElementById("locationFilter"); 
+const categoryFilter = document.getElementById("categoryFilter"); // option value - category.id 
 const dateFilter = document.getElementById("dateFilter");
 const sortSelect = document.getElementById("sortSelect");
 
@@ -140,9 +140,9 @@ async function loadItems() {
         })
       : "Unknown";
 
-    const signedUrl = await getFirstItemImageUrl(item.id);
-    const imageContent = signedUrl
-      ? `<img src="${signedUrl}" alt="${item.name}">`
+    const imageUrl = imageMap.get(item.id);
+    const imageContent = imageUrl
+      ? `<img src="     " alt="    ">`
       : "📦";
 
     const categoryName = item.categories?.name || "Uncategorized";
