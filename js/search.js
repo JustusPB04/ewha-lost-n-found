@@ -40,7 +40,29 @@ async function loadItems() {
     noResults.style.display = "block";
     return;
   }
+  
+  const { data: imagesData, error: imagesError } = await supabaseClient
+    .from("item_images")
+    .select("item_id, storage_path, created_at")
+    .order("created_at", { ascending: true });
 
+  if (imagesError) {
+    console.error("Failed to load item images:", imagesError);
+  }
+
+  const imageMap = new Map();
+  (imagesData || []).forEach((img) => {
+    if (!imageMap.has(img.item_id) && img.storage_path) {
+      const { data: publicUrlData } = supabaseClient.storage
+        .from("item-images") //storage bucket 이름 변경!
+        .getPublicUrl(img.storage_path);
+
+      if (publicUrlData?.publicUrl) {
+        imageMap.set(img.item_id, publicUrlData.publicUrl);
+      }
+    }
+  });
+  
   itemList.innerHTML = "";
 
   data.forEach((item) => {
@@ -50,10 +72,10 @@ async function loadItems() {
     card.dataset.name = item.name || "";
     card.dataset.category = item.category_id || "";
     card.dataset.location = item.found_location || "";
-    card.dataset.date = item.created_at || "";
+    card.dataset.date = targetDate || "";
 
     card.addEventListener("click", () => {
-      window.location.href = `itempage.html?id=${item.id}`;
+      window.location.href = `itempage.html?id= ${item.id}`;    
     });
 
     const formattedDate = item.created_at
@@ -64,15 +86,16 @@ async function loadItems() {
         })
       : "Unknown";
 
-    const imageContent = item.image_url
-      ? `<img src="${item.image_url}" alt="${item.name}">`
+    const imageUrl = imageMap.get(item.id);
+    const imageContent = imageUrl
+      ? `<img src="${imageUrl}" alt="${item.name || "Item image"}">`
       : "📦";
 
     card.innerHTML = `
       <div class="image-placeholder">${imageContent}</div>
       <div class="item-info">
         <h3>${item.name}</h3>
-        <p class="item-meta">Location: ${item.found_location}</p>
+        <p class="item-meta">Location: ${item.found_location || "Unknown"}</p>
         <p class="item-meta">Date: ${formattedDate}</p>
       </div>
       <span class="arrow">›</span>
@@ -160,11 +183,19 @@ sortSelect.addEventListener("change", sortItems);
 
 // Initialize page after authentication check
 async function initializePage() {
-  const user = await requireAuthentication();
+ const { data, error } = await supabaseClient.auth.getSession();
 
-  if (!user) {
+  if (error) {
+    console.error("Failed to check session:", error);
+  }
+
+  // without login we can see list then erase if
+  if (!data?.session) {
+    noResults.textContent = "Please log in to view items.";
+    noResults.style.display = "block";
     return;
   }
+
   await loadCategories();
   await loadItems();
 }
