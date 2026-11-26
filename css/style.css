@@ -317,7 +317,7 @@ footer {
   padding: 1.5rem;
 }
 
-/* Tablet and up (>= 768px): Horizontal nav & larger type/spacing */
+/* Tablet and up (>= 768px): Horizontal nav, larger type/spacing & 2-col layout */
 @media (min-width: 768px) {
   header {
     padding: 1rem 1.5rem;
@@ -343,11 +343,26 @@ footer {
   .profile-main .section-title {
     font-size: 1.375rem;
   }
+
+  .profile-main .item-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
 }
 
-/* Desktop and up (>= 1024px) */
+/* Desktop and up (>= 1024px): Wider container & 3-col layout */
 @media (min-width: 1024px) {
   header {
     padding: 1rem 2rem;
+  }
+
+  .search-main,
+  .profile-main {
+    max-width: 1024px;
+  }
+
+  .profile-main .item-list {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
