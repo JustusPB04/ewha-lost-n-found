@@ -80,8 +80,18 @@ async function loadItems() {
   const { data: sessionData, error: sessionError } =
     await supabaseClient.auth.getSession();
 
-  if (sessionError || !sessionData.session) {
-    showAuthRequiredState();
+  if (sessionError) {
+    console.error("Failed to check session:", sessionError);
+  }
+
+ 
+  if (!sessionData?.session) {
+    itemList.innerHTML = "";
+    if (resultCount) resultCount.textContent = "0";
+    if (noResults) {
+      noResults.textContent = "Please log in to view items.";
+      noResults.style.display = "block";
+    }
     return;
   }
 
@@ -114,17 +124,39 @@ async function loadItems() {
     return;
   }
 
+
+  const { data: imagesData, error: imagesError } = await supabaseClient
+    .from("item_images")
+    .select("item_id, storage_path, created_at")
+    .order("created_at", { ascending: true });
+
+  if (imagesError) {
+    console.error("Failed to load item images:", imagesError);
+  }
+
+  const imageMap = new Map();
+  (imagesData || []).forEach((img) => {
+    if (!imageMap.has(img.item_id) && img.storage_path) {
+      const { data: publicUrlData } = supabaseClient.storage
+        .from("item-images") // name change in future!!
+        .getPublicUrl(img.storage_path);
+
+      if (publicUrlData?.publicUrl) {
+        imageMap.set(img.item_id, publicUrlData.publicUrl);
+      }
+    }
+  });
+
   itemList.innerHTML = "";
 
   for (const item of data) {
-    // date filter and sort by date (found_date prioritized, if there is none, created_at)
     const effectiveDate = item.found_date || item.created_at || "";
 
     const card = document.createElement("a");
     card.className = "item-card";
     card.style.cursor = "pointer";
     card.dataset.name = item.name || "";
-    card.dataset.categoryId = item.category_id || "";
+    card.dataset.category = item.category_id || "";
     card.dataset.location = item.found_location || "";
     card.dataset.date = effectiveDate;
 
@@ -142,7 +174,7 @@ async function loadItems() {
 
     const imageUrl = imageMap.get(item.id);
     const imageContent = imageUrl
-      ? `<img src="     " alt="    ">`
+      ? `<img src="${imageUrl}" alt="${item.name || "Item image"}">`
       : "📦";
 
     const categoryName = item.categories?.name || "Uncategorized";
@@ -164,12 +196,11 @@ async function loadItems() {
   filterItems();
 }
 
-//search + filtering
 function filterItems() {
-  const keyword = searchInput ? searchInput.value.trim().toLowerCase() : "";
-  const selectedLocation = locationFilter ? locationFilter.value : "";
-  const selectedCategoryId = categoryFilter ? categoryFilter.value : "";
-  const dateOption = dateFilter ? dateFilter.value : "all";
+  const keyword = (searchInput?.value || "").toLowerCase();
+  const location = locationFilter?.value || "";
+  const category = categoryFilter?.value || "";
+  const dateOption = dateFilter?.value || "";
   const today = new Date();
 
   const cards = Array.from(itemList.querySelectorAll(".item-card"));
@@ -178,33 +209,25 @@ function filterItems() {
   cards.forEach((card) => {
     const name = (card.dataset.name || "").toLowerCase();
     const cardLocation = card.dataset.location || "";
-    const cardCategoryId = card.dataset.categoryId || "";
+    const cardCategory = card.dataset.category || "";
     const cardDate = new Date(card.dataset.date);
 
     let matchesDate = true;
 
     if (dateOption === "today") {
-      matchesDate =
-        !Number.isNaN(cardDate.getTime()) &&
-        cardDate.toDateString() === today.toDateString();
+      matchesDate = cardDate.toDateString() === today.toDateString();
     } else if (dateOption === "week") {
       const difference = (today - cardDate) / (1000 * 60 * 60 * 24);
-      matchesDate =
-        !Number.isNaN(cardDate.getTime()) &&
-        difference >= 0 &&
-        difference <= 7;
+      matchesDate = difference >= 0 && difference <= 7;
     } else if (dateOption === "month") {
       matchesDate =
-        !Number.isNaN(cardDate.getTime()) &&
         cardDate.getMonth() === today.getMonth() &&
         cardDate.getFullYear() === today.getFullYear();
     }
 
     const matchesKeyword = name.includes(keyword);
-    const matchesLocation =
-      !selectedLocation || cardLocation === selectedLocation;
-    const matchesCategory =
-      !selectedCategoryId || cardCategoryId === selectedCategoryId;
+    const matchesLocation = !location || cardLocation === location;
+    const matchesCategory = !category || cardCategory === category;
 
     const isVisible =
       matchesKeyword && matchesLocation && matchesCategory && matchesDate;
@@ -213,21 +236,20 @@ function filterItems() {
     if (isVisible) visibleCount++;
   });
 
-  if (resultCount) resultCount.textContent = visibleCount;
+  if (resultCount) resultCount.textContent = String(visibleCount);
   if (noResults) {
-    if (visibleCount === 0 && cards.length > 0) {
-      noResults.textContent = "No matching items found.";
-    } else if (visibleCount === 0 && cards.length === 0) {
+    if (visibleCount === 0) {
       noResults.textContent = "No items found.";
+      noResults.style.display = "block";
+    } else {
+      noResults.style.display = "none";
     }
-    noResults.style.display = visibleCount === 0 ? "block" : "none";
   }
 }
 
-// 정렬
 function sortItems() {
   const cards = Array.from(itemList.querySelectorAll(".item-card"));
-  const sortType = sortSelect ? sortSelect.value : "newest";
+  const sortType = sortSelect?.value || "newest";
 
   cards.sort((a, b) => {
     if (sortType === "newest") {
@@ -237,7 +259,7 @@ function sortItems() {
       return new Date(a.dataset.date) - new Date(b.dataset.date);
     }
     if (sortType === "name") {
-      return a.dataset.name.localeCompare(b.dataset.name);
+      return (a.dataset.name || "").localeCompare(b.dataset.name || "");
     }
     return 0;
   });
@@ -245,7 +267,6 @@ function sortItems() {
   cards.forEach((card) => itemList.appendChild(card));
   filterItems();
 }
-
 
 searchInput?.addEventListener("input", filterItems);
 locationFilter?.addEventListener("change", filterItems);
@@ -262,6 +283,6 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// 초기 로드
+//initial load
 loadItems();
 
