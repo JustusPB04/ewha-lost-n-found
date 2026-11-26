@@ -1,29 +1,25 @@
-// Get item ID from URL
 const itemId = new URLSearchParams(window.location.search).get("id");
 
 const message = document.getElementById("message");
 const itemContainer = document.getElementById("itemContainer");
 const foundButton = document.getElementById("foundButton");
+let isLostPost = false;
 
 function showMessage(text, isError = false) {
     message.textContent = text;
-    message.className = isError ? "error" : "";
+    message.className = isError ? "text-danger" : "text-muted";
     message.style.display = "block";
 }
 
-// 1. Check login status
 async function checkLogin() {
     const { data, error } = await supabaseClient.auth.getSession();
-
     if (error || !data.session) {
         window.location.href = "../index.html";
         return false;
     }
-
     return true;
 }
 
-// 2. Load item details
 async function loadItem() {
     if (!itemId) {
         showMessage("No item was selected.", true);
@@ -54,48 +50,46 @@ async function loadItem() {
         return;
     }
 
-    // Display item information
-    document.getElementById("itemName").textContent = item.name || "No name";
+    // Check if this post is a Lost Item report ([LOST])
+    const rawName = item.name || "No name";
+    isLostPost = rawName.startsWith("[LOST]");
 
-    const category = Array.isArray(item.categories)
-        ? item.categories[0]
-        : item.categories;
+    const statusBadge = document.getElementById("statusBadge");
+    if (isLostPost) {
+        statusBadge.textContent = "Lost Item";
+        statusBadge.className = "badge bg-danger";
+        document.getElementById("itemName").textContent = rawName.replace("[LOST]", "").trim();
+        document.getElementById("dateLabel").textContent = "Date Lost";
+        document.getElementById("locationLabel").textContent = "Location Lost";
+        document.getElementById("methodLabel").textContent = "Contact / Return Method";
+        foundButton.textContent = "Mark as Found (Resolved)";
+    } else {
+        statusBadge.textContent = "Found Item";
+        statusBadge.className = "badge bg-success";
+        document.getElementById("itemName").textContent = rawName;
+    }
 
-    document.getElementById("itemCategory").textContent =
-        category?.name || "Not specified";
+    const category = Array.isArray(item.categories) ? item.categories[0] : item.categories;
+    document.getElementById("itemCategory").textContent = category?.name || "Not specified";
+    document.getElementById("itemDescription").textContent = item.description || "No description";
+    document.getElementById("foundDate").textContent = item.found_date || "Not specified";
+    document.getElementById("foundLocation").textContent = item.found_location || "Not specified";
+    document.getElementById("pickupMethod").textContent = item.pickup_method || "Not specified";
 
-    document.getElementById("itemDescription").textContent =
-        item.description || "No description";
-
-    document.getElementById("foundDate").textContent =
-        item.found_date || "Not specified";
-
-    document.getElementById("foundLocation").textContent =
-        item.found_location || "Not specified";
-
-    document.getElementById("pickupMethod").textContent =
-        item.pickup_method || "Not specified";
-
-    // 3. Load images from Supabase Storage
     const imageContainer = document.getElementById("imageContainer");
     imageContainer.innerHTML = "";
 
     for (const image of (item.item_images || [])) {
-        const { data: imageData, error: imageError } =
-            await supabaseClient.storage
-                .from("item-images")
-                .createSignedUrl(image.storage_path, 3600);
+        const { data: imageData, error: imageError } = await supabaseClient.storage
+            .from("item-images")
+            .createSignedUrl(image.storage_path, 3600);
 
-        if (imageError || !imageData) {
-            console.error("Image loading error:", imageError);
-            continue;
-        }
+        if (imageError || !imageData) continue;
 
         const img = document.createElement("img");
         img.src = imageData.signedUrl;
-        img.alt = item.name;
+        img.alt = rawName;
         img.className = "item-image";
-
         imageContainer.appendChild(img);
     }
 
@@ -103,65 +97,40 @@ async function loadItem() {
     itemContainer.style.display = "block";
 }
 
-// 4. Mark item as returned
 foundButton.addEventListener("click", async () => {
-    const confirmed = confirm(
-        "Are you sure you want to mark this item as returned?"
-    );
+    const confirmMsg = isLostPost
+        ? "Have you found your lost item? This will remove the post."
+        : "Are you sure you want to mark this item as returned?";
 
-    if (!confirmed) return;
+    if (!confirm(confirmMsg)) return;
 
     foundButton.disabled = true;
     foundButton.textContent = "Processing...";
 
-    // Get image paths
-    const { data: images, error: imageError } = await supabaseClient
+    const { data: images } = await supabaseClient
         .from("item_images")
         .select("storage_path")
         .eq("item_id", itemId);
 
-    if (imageError) {
-        console.error(imageError);
-        alert("Failed to retrieve item images.");
-        foundButton.disabled = false;
-        foundButton.textContent = "Mark as Returned";
-        return;
-    }
-
-    // Delete images from Storage
     const imagePaths = (images || []).map((image) => image.storage_path);
-
     if (imagePaths.length > 0) {
-        const { error: storageError } = await supabaseClient.storage
-            .from("item-images")
-            .remove(imagePaths);
-
-        if (storageError) {
-            console.error(storageError);
-            alert("Failed to delete item images.");
-            foundButton.disabled = false;
-            foundButton.textContent = "Mark as Returned";
-            return;
-        }
+        await supabaseClient.storage.from("item-images").remove(imagePaths);
     }
 
-    // Delete item record
     const { error: deleteError } = await supabaseClient
         .from("items")
         .delete()
         .eq("id", itemId);
 
     if (deleteError) {
-        console.error(deleteError);
-        alert("Failed to delete item.");
+        alert("Failed to update item status.");
         foundButton.disabled = false;
-        foundButton.textContent = "Mark as Returned";
+        foundButton.textContent = isLostPost ? "Mark as Found (Resolved)" : "Mark as Returned";
         return;
     }
 
-    alert("Item successfully marked as returned!");
+    alert(isLostPost ? "Glad you found your item!" : "Item successfully marked as returned!");
     window.location.href = "search.html";
 });
 
-// Start page
 loadItem();
