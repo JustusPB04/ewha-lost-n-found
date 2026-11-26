@@ -4,33 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lost n Found - Item Details</title>
-
+    <link rel="stylesheet" href="../css/style.css">
     <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-        }
-
-        header {
-            padding: 12px 16px;
-            border-bottom: 1px solid #ddd;
-        }
-
-        header h1 {
-            margin: 10px 0 20px;
-        }
-
-        nav {
-            display: flex;
-            justify-content: space-between;
-        }
-
-        nav a {
-            margin-right: 14px;
-            color: #333;
-            text-decoration: none;
-        }
-
+        /* Item details page only */
         main {
             max-width: 600px;
             margin: 30px auto;
@@ -94,16 +70,6 @@
         #message {
             margin: 20px 0;
         }
-
-        .error {
-            color: red;
-        }
-
-        footer {
-            text-align: center;
-            padding: 16px;
-            color: #666;
-        }
     </style>
 </head>
 
@@ -119,7 +85,7 @@
         </div>
 
         <div>
-            <a href="../logout.html">logout</a>
+            <a href="logout.html">logout</a>
             <a href="profile.html">mypage</a>
         </div>
     </nav>
@@ -178,8 +144,9 @@
 <!-- Supabase JS library -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-<!-- Team Supabase connection -->
+<!-- Team Supabase connection & Navigation -->
 <script src="../js/supabase.js"></script>
+<script src="../js/navigation.js"></script>
 
 <script>
     // Get item ID from URL
