@@ -8,6 +8,25 @@ const itemList = document.getElementById("itemList");
 const resultCount = document.getElementById("resultCount");
 const noResults = document.getElementById("noResults");
 
+async function loadCategories() {
+  const { data, error } = await supabaseClient
+    .from("categories")
+    .select("id, name")
+    .order("name", { ascending: true });
+
+  if (error) {
+    console.error("Failed to load categories:", error);
+    return;
+  }
+
+
+  data.forEach((category) => {
+    const option = document.createElement("option");
+    option.value = category.id;
+    option.textContent = category.name;
+    categoryFilter.appendChild(option);
+  });
+}
 // Load items from Supabase database
 async function loadItems() {
   const { data, error } = await supabaseClient
@@ -29,8 +48,8 @@ async function loadItems() {
     card.className = "item-card";
     card.style.cursor = "pointer"; 
     card.dataset.name = item.name || "";
-    card.dataset.category = item.category || "";
-    card.dataset.location = item.location || "";
+    card.dataset.category = item.category_id || "";
+    card.dataset.location = item.found_location || "";
     card.dataset.date = item.created_at || "";
 
     card.addEventListener("click", () => {
@@ -53,7 +72,7 @@ async function loadItems() {
       <div class="image-placeholder">${imageContent}</div>
       <div class="item-info">
         <h3>${item.name}</h3>
-        <p class="item-meta">Location: ${item.location}</p>
+        <p class="item-meta">Location: ${item.found_location}</p>
         <p class="item-meta">Date: ${formattedDate}</p>
       </div>
       <span class="arrow">›</span>
@@ -146,7 +165,7 @@ async function initializePage() {
   if (!user) {
     return;
   }
-
+  await loadCategories();
   await loadItems();
 }
 
