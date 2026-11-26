@@ -1,136 +1,155 @@
-const itemId = new URLSearchParams(window.location.search).get("id");
+const statusMessage = document.getElementById("statusMessage");
+const detailCard = document.getElementById("detailCard");
+const itemImagesContainer = document.getElementById("itemImagesContainer");
+const itemCategory = document.getElementById("itemCategory");
+const itemName = document.getElementById("itemName");
+const itemCreatedAt = document.getElementById("itemCreatedAt");
+const itemLocation = document.getElementById("itemLocation");
+const itemFoundDate = document.getElementById("itemFoundDate");
+const itemPickupMethod = document.getElementById("itemPickupMethod");
+const itemDescription = document.getElementById("itemDescription");
+const ownerActions = document.getElementById("ownerActions");
+const deleteItemBtn = document.getElementById("deleteItemBtn");
 
-const message = document.getElementById("message");
-const itemContainer = document.getElementById("itemContainer");
-const foundButton = document.getElementById("foundButton");
-let isLostPost = false;
-
-function showMessage(text, isError = false) {
-    message.textContent = text;
-    message.className = isError ? "text-danger" : "text-muted";
-    message.style.display = "block";
+function formatDate(dateString) {
+  if (!dateString) return "Unknown";
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
 }
 
-async function checkLogin() {
-    const { data, error } = await supabaseClient.auth.getSession();
-    if (error || !data.session) {
-        window.location.href = "../index.html";
-        return false;
-    }
-    return true;
+function showStatus(message, isError = false) {
+  if (detailCard) detailCard.style.display = "none";
+  if (statusMessage) {
+    statusMessage.textContent = message;
+    statusMessage.className = isError ? "error" : "";
+    statusMessage.style.display = "block";
+  }
 }
 
-async function loadItem() {
-    if (!itemId) {
-        showMessage("No item was selected.", true);
-        return;
-    }
+async function loadItemDetail() {
+  const { data: sessionData, error: sessionError } =
+    await supabaseClient.auth.getSession();
 
-    const loggedIn = await checkLogin();
-    if (!loggedIn) return;
+  if (sessionError) {
+    console.error("Failed to check session:", sessionError);
+  }
 
-    const { data: item, error } = await supabaseClient
-        .from("items")
-        .select(`
-            id,
-            name,
-            description,
-            found_date,
-            found_location,
-            pickup_method,
-            categories(name),
-            item_images(storage_path)
-        `)
-        .eq("id", itemId)
-        .single();
+  if (!sessionData?.session) {
+    showStatus("Please log in to view item details.", true);
+    return;
+  }
 
-    if (error || !item) {
-        console.error("Item loading error:", error);
-        showMessage("Could not load item details.", true);
-        return;
-    }
+  const params = new URLSearchParams(window.location.search);
+  const itemId = params.get("id");
 
-    // Check if this post is a Lost Item report ([LOST])
-    const rawName = item.name || "No name";
-    isLostPost = rawName.startsWith("[LOST]");
+  if (!itemId) {
+    showStatus("Invalid item ID.", true);
+    return;
+  }
 
-    const statusBadge = document.getElementById("statusBadge");
-    if (isLostPost) {
-        statusBadge.textContent = "Lost Item";
-        statusBadge.className = "badge bg-danger";
-        document.getElementById("itemName").textContent = rawName.replace("[LOST]", "").trim();
-        document.getElementById("dateLabel").textContent = "Date Lost";
-        document.getElementById("locationLabel").textContent = "Location Lost";
-        document.getElementById("methodLabel").textContent = "Contact / Return Method";
-        foundButton.textContent = "Mark as Found (Resolved)";
-    } else {
-        statusBadge.textContent = "Found Item";
-        statusBadge.className = "badge bg-success";
-        document.getElementById("itemName").textContent = rawName;
-    }
+  // 1. items + categories 조회 (search.js와 동일한 컬럼 구조)
+  const { data: item, error } = await supabaseClient
+    .from("items")
+    .select(`
+      id,
+      user_id,
+      category_id,
+      name,
+      description,
+      pickup_method,
+      found_date,
+      found_location,
+      created_at,
+      categories ( name )
+    `)
+    .eq("id", itemId)
+    .single();
 
-    const category = Array.isArray(item.categories) ? item.categories[0] : item.categories;
-    document.getElementById("itemCategory").textContent = category?.name || "Not specified";
-    document.getElementById("itemDescription").textContent = item.description || "No description";
-    document.getElementById("foundDate").textContent = item.found_date || "Not specified";
-    document.getElementById("foundLocation").textContent = item.found_location || "Not specified";
-    document.getElementById("pickupMethod").textContent = item.pickup_method || "Not specified";
+  if (error || !item) {
+    console.error("Failed to load item detail:", error);
+    showStatus("Item not found or failed to load.", true);
+    return;
+  }
 
-    const imageContainer = document.getElementById("imageContainer");
-    imageContainer.innerHTML = "";
+  // 2. 텍스트 필드 렌더링
+  itemCategory.textContent = item.categories?.name || "Uncategorized";
+  itemName.textContent = item.name || "Unnamed Item";
+  itemCreatedAt.textContent = `Posted on ${formatDate(item.created_at)}`;
+  itemLocation.textContent = item.found_location || "Unknown";
+  itemFoundDate.textContent = formatDate(item.found_date || item.created_at);
+  itemPickupMethod.textContent = item.pickup_method || "Not specified";
+  itemDescription.textContent =
+    item.description || "No description provided.";
 
-    for (const image of (item.item_images || [])) {
-        const { data: imageData, error: imageError } = await supabaseClient.storage
-            .from("item-images")
-            .createSignedUrl(image.storage_path, 3600);
+  // 3. item_images 조회 및 렌더링 (search.js와 동일한 item-images 버킷 & getPublicUrl)
+  const { data: imagesData, error: imagesError } = await supabaseClient
+    .from("item_images")
+    .select("id, storage_path, created_at")
+    .eq("item_id", itemId)
+    .order("created_at", { ascending: true });
 
-        if (imageError || !imageData) continue;
+  if (imagesError) {
+    console.error("Failed to load item images:", imagesError);
+  }
 
-        const img = document.createElement("img");
-        img.src = imageData.signedUrl;
-        img.alt = rawName;
-        img.className = "item-image";
-        imageContainer.appendChild(img);
-    }
+  itemImagesContainer.innerHTML = "";
+  const validImages = (imagesData || []).filter((img) => img.storage_path);
 
-    message.style.display = "none";
-    itemContainer.style.display = "block";
-}
+  if (validImages.length > 0) {
+    validImages.forEach((img) => {
+      const { data: publicUrlData } = supabaseClient.storage
+        .from("item-images")
+        .getPublicUrl(img.storage_path);
 
-foundButton.addEventListener("click", async () => {
-    const confirmMsg = isLostPost
-        ? "Have you found your lost item? This will remove the post."
-        : "Are you sure you want to mark this item as returned?";
+      if (publicUrlData?.publicUrl) {
+        const imgEl = document.createElement("img");
+        imgEl.src = publicUrlData.publicUrl;
+        imgEl.alt = item.name || "Item image";
+        itemImagesContainer.appendChild(imgEl);
+      }
+    });
+  }
 
-    if (!confirm(confirmMsg)) return;
+  if (itemImagesContainer.children.length === 0) {
+    itemImagesContainer.innerHTML = `<div class="no-image-box">📦</div>`;
+  }
 
-    foundButton.disabled = true;
-    foundButton.textContent = "Processing...";
+  // 4. 본인 게시글일 경우 삭제 버튼 활성화
+  const currentUserId = sessionData.session.user?.id;
+  if (currentUserId && currentUserId === item.user_id) {
+    ownerActions.style.display = "flex";
+    deleteItemBtn.onclick = async () => {
+      if (!confirm("Are you sure you want to delete this item?")) return;
 
-    const { data: images } = await supabaseClient
-        .from("item_images")
-        .select("storage_path")
-        .eq("item_id", itemId);
-
-    const imagePaths = (images || []).map((image) => image.storage_path);
-    if (imagePaths.length > 0) {
-        await supabaseClient.storage.from("item-images").remove(imagePaths);
-    }
-
-    const { error: deleteError } = await supabaseClient
+      const { error: deleteError } = await supabaseClient
         .from("items")
         .delete()
-        .eq("id", itemId);
+        .eq("id", item.id);
 
-    if (deleteError) {
-        alert("Failed to update item status.");
-        foundButton.disabled = false;
-        foundButton.textContent = isLostPost ? "Mark as Found (Resolved)" : "Mark as Returned";
+      if (deleteError) {
+        alert("Failed to delete item: " + deleteError.message);
         return;
-    }
+      }
 
-    alert(isLostPost ? "Glad you found your item!" : "Item successfully marked as returned!");
-    window.location.href = "search.html";
+      alert("Item deleted.");
+      window.location.href = "search.html";
+    };
+  }
+
+  statusMessage.style.display = "none";
+  detailCard.style.display = "block";
+}
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (session) {
+    loadItemDetail();
+  } else {
+    showStatus("Please log in first to view item details.", true);
+  }
 });
 
-loadItem();
+// initial load
+loadItemDetail();
