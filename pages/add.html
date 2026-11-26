@@ -12,7 +12,6 @@
   </style>
 </head>
 <body>
-
   <header>
     <h1>lostnfound</h1>
     <nav>
@@ -21,8 +20,8 @@
         <a href="search.html">search</a>
       </div>
       <div>
-        <a href="logout.html">logout</a>
-        <a href="mypage.html">mypage</a>
+        <a href="#" id="logout-button">logout</a>
+        <a href="profile.html">mypage</a>
       </div>
     </nav>
   </header>
@@ -72,94 +71,115 @@
     <p>&copy; 2026 Gitastic5. All rights reserved.</p>
   </footer>
 
-  <!-- Supabase JS library -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- browser-image-compression: compresses photos before upload (NFR-03) -->
-  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
-  <script>
-    // TODO: Replace with our project's values (use the Publishable Key, NEVER the Secret Key!)
-    const supabaseClient = supabase.createClient(
-      'https://YOUR-PROJECT.supabase.co',
-      'YOUR-PUBLISHABLE-KEY'
-    );
+  
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/supabase.js"></script>
+<script src="../js/auth-guard.js"></script>
+<script src="../js/navigation.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
 
+<script>
     const form = document.getElementById('add-form');
     const message = document.getElementById('message');
     let user = null;
 
     function showMessage(text, type) {
-      message.textContent = text;
-      message.className = type;
+        message.textContent = text;
+        message.className = type;
     }
 
-    // Redirect to the login page if the user is not logged in
-    async function checkLogin() {
-      const { data } = await supabaseClient.auth.getSession();
-      if (!data.session) {
-        location.href = 'login.html';
-        return;
-      }
-      user = data.session.user;
-      loadCategories();
-    }
-
-    // Fill the category dropdown from the categories table
+    // Load categories from database
     async function loadCategories() {
-      const { data } = await supabaseClient.from('categories').select('id, name');
-      const select = document.getElementById('category');
-      data.forEach((category) => {
-        select.innerHTML += `<option value="${category.id}">${category.name}</option>`;
-      });
-    }
+        const { data, error } = await supabaseClient
+            .from('categories')
+            .select('id, name');
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault(); // Prevent the page from reloading on submit
-      showMessage('Uploading...', '');
-
-      // 1. Save the item first (its id is needed for the photo folder)
-      const { data: item, error } = await supabaseClient
-        .from('items')
-        .insert({
-          user_id: user.id,
-          category_id: document.getElementById('category').value,
-          name: document.getElementById('name').value,
-          found_date: document.getElementById('found-date').value,
-          found_location: document.getElementById('found-location').value,
-          pickup_method: document.getElementById('storage-location').value,
-          description: document.getElementById('description').value
-        })
-        .select('id')
-        .single();
-
-      if (error) {
-        showMessage('Failed to save the item.', 'error');
-        return;
-      }
-
-      // 2. Compress and upload each photo to item-images/ITEM_ID/
-      const photos = document.getElementById('photos').files;
-      for (let i = 0; i < photos.length; i++) {
-        const compressed = await imageCompression(photos[i], { maxSizeMB: 1 });
-        const path = `${item.id}/image-${i + 1}-${photos[i].name}`;
-
-        const { error: uploadError } = await supabaseClient.storage
-          .from('item-images')
-          .upload(path, compressed);
-
-        if (uploadError) {
-          showMessage('Failed to upload photos.', 'error');
-          return;
+        if (error) {
+            showMessage('Failed to load categories.', 'error');
+            return;
         }
 
-        // 3. Save the photo path in item_images
-        await supabaseClient.from('item_images').insert({ item_id: item.id, storage_path: path });
-      }
+        const select = document.getElementById('category');
 
-      showMessage('Item uploaded successfully!', 'success');
-      form.reset(); // Stay on add.html with an empty form
+        data.forEach((category) => {
+            select.innerHTML +=
+                `<option value="${category.id}">${category.name}</option>`;
+        });
+    }
+
+    // Initialize page after authentication check
+    async function initializePage() {
+        user = await requireAuthentication();
+
+        if (!user) {
+            return;
+        }
+
+        await loadCategories();
+    }
+
+    // Upload item
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        showMessage('Uploading...', '');
+
+        const { data: item, error } = await supabaseClient
+            .from('items')
+            .insert({
+                user_id: user.id,
+                category_id: document.getElementById('category').value,
+                name: document.getElementById('name').value,
+                found_date: document.getElementById('found-date').value,
+                found_location: document.getElementById('found-location').value,
+                pickup_method: document.getElementById('storage-location').value,
+                description: document.getElementById('description').value
+            })
+            .select('id')
+            .single();
+
+        if (error) {
+            showMessage('Failed to save the item.', 'error');
+            return;
+        }
+
+        const photos = document.getElementById('photos').files;
+
+        for (let i = 0; i < photos.length; i++) {
+            const compressed = await imageCompression(
+                photos[i],
+                { maxSizeMB: 1 }
+            );
+
+            const path = `${item.id}/image-${i + 1}-${photos[i].name}`;
+
+            const { error: uploadError } = await supabaseClient.storage
+                .from('item-images')
+                .upload(path, compressed);
+
+            if (uploadError) {
+                showMessage('Failed to upload photos.', 'error');
+                return;
+            }
+
+            const { error: imageError } = await supabaseClient
+                .from('item_images')
+                .insert({
+                    item_id: item.id,
+                    storage_path: path
+                });
+
+            if (imageError) {
+                showMessage('Failed to save image information.', 'error');
+                return;
+            }
+        }
+
+        showMessage('Item uploaded successfully!', 'success');
+        form.reset();
     });
 
-    checkLogin();
-  </script>
+    initializePage();
+</script>
 </body>
 </html>
+

@@ -138,8 +138,8 @@
         <a href="search.html">search</a>
       </div>
       <div class="nav-right">
-        <a href="logout.html">logout</a>
-        <a href="mypage.html">mypage</a>
+        <a href="#" id="logout-button">logout</a>
+        <a href="profile.html">mypage</a>
       </div>
     </nav>
   </header>
@@ -167,105 +167,111 @@
     <p>&copy; 2026 Gitastic5. All rights reserved.</p>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    
-    const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-    const SUPABASE_KEY = 'YOUR-PUBLISHABLE-KEY';
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  
+<!-- Supabase JS library -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+<!-- Central Supabase client -->
+<script src="../js/supabase.js"></script>
+
+<!-- Authentication guard -->
+<script src="../js/auth-guard.js"></script>
+
+<!-- Navigation -->
+<script src="../js/navigation.js"></script>
+
+<script>
     const userEmailDisplay = document.getElementById('user-email');
     const deleteBtn = document.getElementById('delete-account-btn');
     const itemListContainer = document.getElementById('item-list-container');
 
     let currentUser = null;
 
-    async function checkAuthAndLoadData() {
-      const { data: { user }, error } = await supabaseClient.auth.getUser();
+    // Initialize page after authentication check
+    async function initializePage() {
+        currentUser = await requireAuthentication();
 
-      if (error || !user) {
-        alert("Please log in to access My Page.");
-        window.location.href = 'login.html';
-        return;
-      }
-
-      currentUser = user;
-      userEmailDisplay.textContent = user.email;
-      loadMyItems(user.id);
-    }
-
-    async function loadMyItems(userId) {
-  
-      const { data: items, error } = await supabaseClient
-        .from('items')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      itemListContainer.innerHTML = '';
-
-      if (error) {
-        console.error("Error fetching items:", error);
-        itemListContainer.innerHTML = '<p class="no-items-msg" style="color:red;">Failed to load items.</p>';
-        return;
-      }
-
-      if (!items || items.length === 0) {
-        itemListContainer.innerHTML = '<p class="no-items-msg">You have not uploaded any items yet.</p>';
-        return;
-      }
-
-      items.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'item-card';
-        
-        card.onclick = () => {
-          window.location.href = `item.html?id=${item.id}`;
-        };
-
-        const titleDateWrapper = document.createElement('div');
-        
-        const title = document.createElement('p');
-        title.className = 'item-title';
-        title.textContent = item.title || item.name;
-
-        const date = document.createElement('p');
-        date.className = 'item-date';
-        date.textContent = new Date(item.created_at).toLocaleDateString();
-
-        titleDateWrapper.appendChild(title);
-        titleDateWrapper.appendChild(date);
-        
-        const status = document.createElement('span');
-        status.style.color = '#666';
-        status.textContent = item.status || 'Active';
-
-        card.appendChild(titleDateWrapper);
-        card.appendChild(status);
-
-        itemListContainer.appendChild(card);
-      });
-    }
-
-    deleteBtn.addEventListener('click', async () => {
-      const confirmDelete = confirm("Are you sure you want to delete your account? This action cannot be undone and will delete all your uploaded items.");
-      
-      if (confirmDelete && currentUser) {
-        
-        const { error } = await supabaseClient.rpc('delete_user_account'); 
-        
-        if (error) {
-          console.error("Error deleting account:", error);
-          alert("Failed to delete account. Please try again later.");
-        } else {
-          alert("Your account has been deleted successfully.");
-          await supabaseClient.auth.signOut();
-          window.location.href = 'login.html';
+        if (!currentUser) {
+            return;
         }
-      }
+
+        userEmailDisplay.textContent = currentUser.email;
+
+        await loadMyItems(currentUser.id);
+    }
+
+    // Load items uploaded by the current user
+    async function loadMyItems(userId) {
+        const { data: items, error } = await supabaseClient
+            .from('items')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        itemListContainer.innerHTML = '';
+
+        if (error) {
+            console.error("Error fetching items:", error);
+            itemListContainer.innerHTML =
+                '<p class="no-items-msg" style="color:red;">Failed to load items.</p>';
+            return;
+        }
+
+        if (!items || items.length === 0) {
+            itemListContainer.innerHTML =
+                '<p class="no-items-msg">You have not uploaded any items yet.</p>';
+            return;
+        }
+
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'item-card';
+
+            card.onclick = () => {
+                window.location.href = `item.html?id=${item.id}`;
+            };
+
+            const titleDateWrapper = document.createElement('div');
+
+            const title = document.createElement('p');
+            title.className = 'item-title';
+            title.textContent = item.name;
+
+            const date = document.createElement('p');
+            date.className = 'item-date';
+            date.textContent = new Date(item.created_at).toLocaleDateString();
+
+            titleDateWrapper.appendChild(title);
+            titleDateWrapper.appendChild(date);
+
+            card.appendChild(titleDateWrapper);
+            itemListContainer.appendChild(card);
+        });
+    }
+
+    // Delete account
+    deleteBtn.addEventListener('click', async () => {
+        const confirmDelete = confirm(
+            "Are you sure you want to delete your account? This action cannot be undone and will delete all your uploaded items."
+        );
+
+        if (confirmDelete && currentUser) {
+            const { error } = await supabaseClient.rpc('delete_user_account');
+
+            if (error) {
+                console.error("Error deleting account:", error);
+                alert("Failed to delete account. Please try again later.");
+            } else {
+                alert("Your account has been deleted successfully.");
+                await supabaseClient.auth.signOut();
+                window.location.href = '../index.html';
+            }
+        }
     });
 
-    document.addEventListener('DOMContentLoaded', checkAuthAndLoadData);
-  </script>
+    initializePage();
+</script>
+</body>
+</html>
 </body>
 </html>

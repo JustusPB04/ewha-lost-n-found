@@ -139,5 +139,15 @@ categoryFilter.addEventListener("change", filterItems);
 dateFilter.addEventListener("change", filterItems);
 sortSelect.addEventListener("change", sortItems);
 
-// Fetch items on page load
-loadItems();
+// Initialize page after authentication check
+async function initializePage() {
+  const user = await requireAuthentication();
+
+  if (!user) {
+    return;
+  }
+
+  await loadItems();
+}
+
+initializePage();
