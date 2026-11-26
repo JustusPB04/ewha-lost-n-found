@@ -53,12 +53,14 @@ form.addEventListener("submit", async (event) => {
     });
 
     if (error) {
-        showMessage(
-            "Login failed. Please check your email and password.",
-            "error"
-        );
-        return;
-    }
+    console.error("Login error:", error);
+
+    showMessage(
+        "Login failed: " + error.message,
+        "error"
+    );
+    return;
+}
 
     showMessage("Login successful!", "success");
 });
