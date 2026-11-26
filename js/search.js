@@ -72,7 +72,7 @@ async function loadItems() {
     card.dataset.name = item.name || "";
     card.dataset.category = item.category_id || "";
     card.dataset.location = item.found_location || "";
-    card.dataset.date = targetDate || "";
+    card.dataset.date = item.found_date || item.created_at || "";
 
     card.addEventListener("click", () => {
       window.location.href = `itempage.html?id= ${item.id}`;    

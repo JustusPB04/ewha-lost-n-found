@@ -4,22 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lost n Found - Add Item</title>
+  <link rel="stylesheet" href="../css/style.css">
   <style>
-    /* nav: add, search on the left / logout, mypage on the right */
-    nav { display: flex; justify-content: space-between; }
-    .success { color: green; }
-    .error { color: red; }
+    /* Add page only */
+    main { max-width: 600px; margin: 0 auto; padding: 1rem; }
+    input, select, textarea { width: 100%; padding: 0.5rem; font-size: 1rem; }
+    textarea { min-height: 6rem; }
   </style>
 </head>
 <body>
   <header>
     <h1>lostnfound</h1>
     <nav>
-      <div>
+      <div class="nav-left">
         <a href="add.html">add</a>
         <a href="search.html">search</a>
       </div>
-      <div>
+      <div class="nav-right">
         <a href="#" id="logout-button">logout</a>
         <a href="profile.html">mypage</a>
       </div>
@@ -150,7 +151,7 @@
                 { maxSizeMB: 1 }
             );
 
-            const path = `${item.id}/image-${i + 1}-${photos[i].name}`;
+                       const path = `${item.id}/image-${i + 1}.${photos[i].type.split('/')[1]}`;
 
             const { error: uploadError } = await supabaseClient.storage
                 .from('item-images')
