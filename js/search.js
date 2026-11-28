@@ -75,7 +75,7 @@ async function loadItems() {
     card.dataset.date = item.found_date || item.created_at || "";
 
     card.addEventListener("click", () => {
-      window.location.href = `itempage.html?id= ${item.id}`;    
+      window.location.href = `item.html?id= ${item.id}`;    
     });
 
     const formattedDate = item.created_at
